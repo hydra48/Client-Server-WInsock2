@@ -1,5 +1,7 @@
 #include <WinSock2.h>
 #include <Windows.h>
+#include <vector>
+#include <string>
 #include <iostream>
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -11,8 +13,52 @@ char* cstr = msg.data();
 SOCKET acpt;
 
 DWORD WINAPI receive(LPVOID socket) {
+	char buffer[4097];
+	char sizebuffer[17];
+	int receivedTotal = 0;
+	int realsize = 0;
+	std::vector<char> totalbuffer;
 	while (true) {
+		int sizereceived = 0;
+		while (sizereceived < 16) {
+			int bytereceive = recv(acpt, sizebuffer + sizereceived, 16 - sizereceived, 0);
+			if (bytereceive <= 0) {
+				return 0;
+			}
 
+			sizereceived = sizereceived + bytereceive;
+		}
+		sizebuffer[16] = '\0';
+		std::string commands = sizebuffer;
+		if (commands.rfind("siz", 0) == 0) {
+
+			std::cout << sizebuffer << std::endl;
+
+			realsize = std::stoi(commands.substr(3));
+			totalbuffer.resize(realsize);
+			receivedTotal = 0;
+
+		}
+		while (receivedTotal < realsize) {
+			int remaining = realsize - receivedTotal;
+			int toreceive = min(4096, remaining);
+			int bytereceive = recv(acpt, buffer, toreceive, 0);
+			if (bytereceive <= 0) {
+				return 0;
+			}
+
+			memcpy(totalbuffer.data() + receivedTotal, buffer, bytereceive);
+			receivedTotal = receivedTotal + bytereceive;
+
+		}
+		if (receivedTotal == realsize) {
+			std::cout << "message : " << std::endl;
+			std::cout.write(totalbuffer.data(), receivedTotal);
+			std::cout << std::endl;
+			receivedTotal = 0;
+			realsize = 0;
+			totalbuffer.clear();
+		}
 	}
 	return 0;
 }
@@ -39,7 +85,7 @@ void sendata(SOCKET s, char* data) {
 		total = bytesent + total;
 		data = data + bytesent;
 		size = size - bytesent;
-		std::cout << buffer << std::endl;
+		//std::cout << buffer << std::endl;
 		LeaveCriticalSection(&lock);
 	} while (total < size2);
 
@@ -71,6 +117,7 @@ int main()
 		{
 			acpt = accept(s, (sockaddr*)&addr, &size);
 		    HANDLE thread = CreateThread(NULL, 0, receive, &acpt, 0, NULL);
+			
 			std::cin;
 			break;
 			
